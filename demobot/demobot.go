@@ -1,20 +1,3 @@
-![image]({https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white})
-![image]({https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white})
-
-# tgminbot
-Minimalistic Telegram Bot package written in Go. Get your bot running in minutes.
-
-## Current features
-
-    * Sending text-only replies with quoting support
-
-## Planned features
-
-    * Sending audio files
-
-## Demo
-
-```go
 package main
 
 import (
@@ -46,4 +29,3 @@ func main() {
 	// All done
 	fmt.Printf("Stopped at message ID = %d\n", tgb.LastUpdateID)
 }
-
