@@ -12,7 +12,18 @@ func ActualHandler(tgmsg mbot.JSONStruct) {
 	// Show received message
 	fmt.Printf("%s [%d]: %s \n", mbot.TGMSGGetFromUsername(tgmsg), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetText(tgmsg))
 	// Send quoted reply
-	tgb.SendMessage_PlainText(fmt.Sprintf("Hello, %s!", mbot.TGMSGGetFromUsername(tgmsg)), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetMessageID(tgmsg))
+	_, err := tgb.SendMessage_PlainText(fmt.Sprintf("Hello, %s!", mbot.TGMSGGetFromUsername(tgmsg)), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetMessageID(tgmsg))
+	if err != nil {
+		fmt.Printf("%+v\n", err)
+	}
+	// Send mp3 file
+	afile := mbot.AttachedFileData{LocalFile: "sample.mp3",
+		Caption: "Downloaded using @" + tgb.UserName, Performer: "Demo", Title: "Sample Sound",
+	}
+	_, err = tgb.SendMessage_Audio(afile, mbot.TGMSGGetFromID(tgmsg))
+	if err != nil {
+		fmt.Printf("%+v\n", err)
+	}
 }
 
 func main() {

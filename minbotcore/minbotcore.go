@@ -3,7 +3,13 @@ package minbotcore
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
+	"os"
+	"reflect"
 )
 
 const (
@@ -11,6 +17,7 @@ const (
 	apiGetMe       = "getMe"
 	apiGetUpdates  = "getUpdates"
 	apiSendMessage = "sendMessage"
+	apiSendAudio   = "sendAudio"
 	// Misc
 	apiWaitTime = 30
 	apiMIMEType = "application/json"
@@ -29,6 +36,16 @@ type (
 	JSONStruct = map[string]interface{}
 
 	TGMessageHandler func(tgmsg JSONStruct)
+
+	AttachedFileData struct {
+		LocalFile  string
+		RemoteName string
+		FieldName  string
+		MimeType   string
+		Caption    string
+		Performer  string
+		Title      string
+	}
 )
 
 func TGMSGGetText(jsmsg JSONStruct) string {
@@ -90,6 +107,62 @@ func (tgbc TGMinBotCore) jsonRPC(instruct JSONStruct, apiMethod string) (outstru
 	}
 }
 
+func (tgbc TGMinBotCore) formRPC(instruct JSONStruct, apiMethod string, attFile AttachedFileData) (outstruct JSONStruct, err error) {
+	body := &bytes.Buffer{}
+	// Set message parameters as multipart form data
+	writer := multipart.NewWriter(body)
+	for key, value := range instruct {
+		vt := reflect.TypeOf(value)
+		switch vt.Kind() {
+		case reflect.String:
+			writer.WriteField(key, value.(string))
+		case reflect.Int64:
+			writer.WriteField(key, fmt.Sprintf("%d", value.(int64)))
+		}
+	}
+	// Attach a file
+	afile, err := os.Open(attFile.LocalFile)
+	if err == nil {
+		defer afile.Close()
+		aheader := make(textproto.MIMEHeader)
+		aheader.Set("Content-Disposition",
+			fmt.Sprintf(`form-data; name="%s"; filename="%s"`, attFile.FieldName, attFile.RemoteName))
+		aheader.Set("Content-Type", attFile.MimeType)
+		afilepart, err := writer.CreatePart(aheader)
+		if err == nil {
+			io.Copy(afilepart, afile)
+			// NB! writer.Close() is not deferred here because
+			// the multipart closing boundary must be written before issuing HTTPS request
+			writer.Close()
+		} else {
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", apiBaseURL+tgbc.APIToken+"/"+apiMethod, body)
+	if err == nil {
+		req.Header.Add("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
+		hclient := &http.Client{}
+		resp, err := hclient.Do(req)
+		if err == nil {
+			decoder := json.NewDecoder(resp.Body)
+			decoder.UseNumber()
+			err := decoder.Decode(&outstruct)
+			resp.Body.Close()
+			if err == nil {
+				return outstruct, nil
+			} else {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+}
+
 func (tgbc *TGMinBotCore) LoadMessages() bool {
 	APIReq := JSONStruct{"offset": tgbc.LastUpdateID + 1, "timeout": apiWaitTime}
 	APIResp, err := tgbc.jsonRPC(APIReq, apiGetUpdates)
@@ -113,14 +186,23 @@ func (tgbc *TGMinBotCore) LoadMessages() bool {
 	return false
 }
 
-func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, replyto int64) bool {
+func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, replyto int64) (bool, error) {
 	APIReq := JSONStruct{"chat_id": chatid, "text": msgtext}
 	if replyto != 0 {
 		APIReq["reply_to_message_id"] = replyto
 	}
 	APIResp, err := tgbc.jsonRPC(APIReq, apiSendMessage)
-	if err == nil {
-		return APIResp["ok"].(bool)
-	}
-	return false
+	return APIResp["ok"].(bool), err
+}
+
+func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid int64) (bool, error) {
+	APIReq := JSONStruct{"chat_id": chatid,
+		"caption":   audiofile.Caption,
+		"performer": audiofile.Performer,
+		"title":     audiofile.Title}
+	audiofile.RemoteName = audiofile.Performer + " - " + audiofile.Title + ".mp3"
+	audiofile.FieldName = "audio"
+	audiofile.MimeType = "audio/mpeg"
+	APIResp, err := tgbc.formRPC(APIReq, apiSendAudio, audiofile)
+	return APIResp["ok"].(bool), err
 }

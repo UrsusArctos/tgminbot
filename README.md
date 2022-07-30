@@ -7,10 +7,11 @@ Minimalistic Telegram Bot package written in Go. Get your bot running in minutes
 ## Current features
 
     * Sending text-only replies with quoting support
+	* Sending audio files
 
 ## Planned features
 
-    * Sending audio files
+    * Sending arbitrary files
 
 ## Demo
 
@@ -29,7 +30,18 @@ func ActualHandler(tgmsg mbot.JSONStruct) {
 	// Show received message
 	fmt.Printf("%s [%d]: %s \n", mbot.TGMSGGetFromUsername(tgmsg), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetText(tgmsg))
 	// Send quoted reply
-	tgb.SendMessage_PlainText(fmt.Sprintf("Hello, %s!", mbot.TGMSGGetFromUsername(tgmsg)), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetMessageID(tgmsg))
+	_, err := tgb.SendMessage_PlainText(fmt.Sprintf("Hello, %s!", mbot.TGMSGGetFromUsername(tgmsg)), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetMessageID(tgmsg))
+	if err != nil {
+		fmt.Printf("%+v\n", err)
+	}
+	// Send mp3 file
+	afile := mbot.AttachedFileData{LocalFile: "sample.mp3",
+		Caption: "Downloaded using @" + tgb.UserName, Performer: "Demo", Title: "Sample Sound",
+	}
+	_, err = tgb.SendMessage_Audio(afile, mbot.TGMSGGetFromID(tgmsg))
+	if err != nil {
+		fmt.Printf("%+v\n", err)
+	}
 }
 
 func main() {
@@ -46,4 +58,3 @@ func main() {
 	// All done
 	fmt.Printf("Stopped at message ID = %d\n", tgb.LastUpdateID)
 }
-
