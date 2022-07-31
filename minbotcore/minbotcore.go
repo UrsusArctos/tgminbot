@@ -195,6 +195,10 @@ func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, rep
 	return APIResp["ok"].(bool), err
 }
 
+func (tgbc TGMinBotCore) SendMessage_AsReplyTo(msgtext string, quotedmsg JSONStruct) (bool, error) {
+	return tgbc.SendMessage_PlainText(msgtext, TGMSGGetFromID(quotedmsg), TGMSGGetMessageID(quotedmsg))
+}
+
 func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid int64) (bool, error) {
 	APIReq := JSONStruct{"chat_id": chatid,
 		"caption":   audiofile.Caption,

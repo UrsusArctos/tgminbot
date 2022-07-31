@@ -12,7 +12,7 @@ func ActualHandler(tgmsg mbot.JSONStruct) {
 	// Show received message
 	fmt.Printf("%s [%d]: %s \n", mbot.TGMSGGetFromUsername(tgmsg), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetText(tgmsg))
 	// Send quoted reply
-	_, err := tgb.SendMessage_PlainText(fmt.Sprintf("Hello, %s!", mbot.TGMSGGetFromUsername(tgmsg)), mbot.TGMSGGetFromID(tgmsg), mbot.TGMSGGetMessageID(tgmsg))
+	_, err := tgb.SendMessage_AsReplyTo(fmt.Sprintf("Hello, %s!", mbot.TGMSGGetFromUsername(tgmsg)), tgmsg)
 	if err != nil {
 		fmt.Printf("%+v\n", err)
 	}
