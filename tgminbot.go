@@ -1,1 +1,1 @@
-package tgminbot
+package main
