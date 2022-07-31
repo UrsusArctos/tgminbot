@@ -191,9 +191,10 @@ func (tgbc *TGMinBotCore) LoadMessages() bool {
 }
 
 func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, replyto int64) (outstruct JSONStruct, err error) {
-	APIReq := JSONStruct{"chat_id": chatid, "text": msgtext}
+	APIReq := JSONStruct{"chat_id": chatid, "text": msgtext, "parse_mode": "MarkdownV2"}
 	if replyto != 0 {
 		APIReq["reply_to_message_id"] = replyto
+		APIReq["allow_sending_without_reply"] = true
 	}
 	return tgbc.jsonRPC(APIReq, apiSendMessage)
 }
