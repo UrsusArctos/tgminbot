@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	mbot "projects/tgminbot/minbotcore"
+
+	mbot "github.com/UrsusArctos/tgminbot/minbotcore"
 )
 
 var tgb mbot.TGMinBotCore
