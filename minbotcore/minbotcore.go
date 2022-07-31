@@ -66,6 +66,10 @@ func TGMSGGetFromUsername(jsmsg JSONStruct) string {
 	return jsmsg["message"].(JSONStruct)["from"].(JSONStruct)["username"].(string)
 }
 
+func Sent(RPCResponse JSONStruct) bool {
+	return RPCResponse["ok"].(bool)
+}
+
 func NewInstance(BOTToken string) (tgbc TGMinBotCore) {
 	resp, err := http.Post(apiBaseURL+BOTToken+"/"+apiGetMe, apiMIMEType, nil)
 	if err == nil {
@@ -186,20 +190,19 @@ func (tgbc *TGMinBotCore) LoadMessages() bool {
 	return false
 }
 
-func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, replyto int64) (bool, error) {
+func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, replyto int64) (outstruct JSONStruct, err error) {
 	APIReq := JSONStruct{"chat_id": chatid, "text": msgtext}
 	if replyto != 0 {
 		APIReq["reply_to_message_id"] = replyto
 	}
-	APIResp, err := tgbc.jsonRPC(APIReq, apiSendMessage)
-	return APIResp["ok"].(bool), err
+	return tgbc.jsonRPC(APIReq, apiSendMessage)
 }
 
-func (tgbc TGMinBotCore) SendMessage_AsReplyTo(msgtext string, quotedmsg JSONStruct) (bool, error) {
+func (tgbc TGMinBotCore) SendMessage_AsReplyTo(msgtext string, quotedmsg JSONStruct) (outstruct JSONStruct, err error) {
 	return tgbc.SendMessage_PlainText(msgtext, TGMSGGetFromID(quotedmsg), TGMSGGetMessageID(quotedmsg))
 }
 
-func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid int64) (bool, error) {
+func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid int64) (outstruct JSONStruct, err error) {
 	APIReq := JSONStruct{"chat_id": chatid,
 		"caption":   audiofile.Caption,
 		"performer": audiofile.Performer,
@@ -207,6 +210,5 @@ func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid in
 	audiofile.RemoteName = audiofile.Performer + " - " + audiofile.Title + ".mp3"
 	audiofile.FieldName = "audio"
 	audiofile.MimeType = "audio/mpeg"
-	APIResp, err := tgbc.formRPC(APIReq, apiSendAudio, audiofile)
-	return APIResp["ok"].(bool), err
+	return tgbc.formRPC(APIReq, apiSendAudio, audiofile)
 }
