@@ -35,6 +35,7 @@ func main() {
 	fmt.Println("Started as @" + tgb.UserName)
 	// Set message handler
 	tgb.MSGHandler = ActualHandler
+	tgb.MSGParseMode = mbot.PMMarkdownV2
 	// Run message loop
 	for tgb.LoadMessages() {
 	}

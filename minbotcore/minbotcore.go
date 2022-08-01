@@ -21,6 +21,11 @@ const (
 	// Misc
 	apiWaitTime = 30
 	apiMIMEType = "application/json"
+	// Parse modes
+	PMPlainText  = ""
+	PMMarkdown   = "Markdown"
+	PMMarkdownV2 = "MarkdownV2"
+	PMHTML       = "HTML"
 )
 
 type (
@@ -30,6 +35,7 @@ type (
 		APIToken     string
 		BotID        int64
 		LastUpdateID int64
+		MSGParseMode string
 		MSGHandler   TGMessageHandler
 	}
 
@@ -87,6 +93,7 @@ func NewInstance(BOTToken string) (tgbc TGMinBotCore) {
 				tgbc.BotID, _ = result["id"].(json.Number).Int64()
 				tgbc.LastUpdateID = 0
 				tgbc.MSGHandler = nil
+				tgbc.MSGParseMode = PMPlainText
 			}
 		}
 	}
@@ -191,7 +198,7 @@ func (tgbc *TGMinBotCore) LoadMessages() bool {
 }
 
 func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, replyto int64) (outstruct JSONStruct, err error) {
-	APIReq := JSONStruct{"chat_id": chatid, "text": msgtext, "parse_mode": "MarkdownV2"}
+	APIReq := JSONStruct{"chat_id": chatid, "text": msgtext, "parse_mode": tgbc.MSGParseMode}
 	if replyto != 0 {
 		APIReq["reply_to_message_id"] = replyto
 		APIReq["allow_sending_without_reply"] = true
