@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -29,20 +30,22 @@ const (
 )
 
 type (
+	// Structure holding bot instance
 	TGMinBotCore struct {
-		DisplayName  string
-		UserName     string
 		APIToken     string
-		BotID        int64
 		LastUpdateID int64
-		MSGParseMode string
+		BotInfo      TBotInfo
 		MSGHandler   TGMessageHandler
+		MSGParseMode string
 	}
 
-	JSONStruct = map[string]interface{}
+	// Common structure used to convey API call parameters
+	JSONStruct map[string]interface{}
 
-	TGMessageHandler func(tgmsg JSONStruct)
+	// Message handler to call upon each incoming message
+	TGMessageHandler func(msginfo TMessageInfo)
 
+	// File attachment data
 	AttachedFileData struct {
 		LocalFile  string
 		RemoteName string
@@ -54,62 +57,33 @@ type (
 	}
 )
 
-func TGMSGGetText(jsmsg JSONStruct) string {
-	return jsmsg["message"].(JSONStruct)["text"].(string)
-}
-
-func TGMSGGetMessageID(jsmsg JSONStruct) int64 {
-	idval, _ := jsmsg["message"].(JSONStruct)["message_id"].(json.Number).Int64()
-	return idval
-}
-
-func TGMSGGetFromID(jsmsg JSONStruct) int64 {
-	idval, _ := jsmsg["message"].(JSONStruct)["from"].(JSONStruct)["id"].(json.Number).Int64()
-	return idval
-}
-
-func TGMSGGetFromUsername(jsmsg JSONStruct) string {
-	return jsmsg["message"].(JSONStruct)["from"].(JSONStruct)["username"].(string)
-}
-
-func Sent(RPCResponse JSONStruct) bool {
-	return RPCResponse["ok"].(bool)
-}
-
 func NewInstance(BOTToken string) (tgbc TGMinBotCore) {
 	resp, err := http.Post(apiBaseURL+BOTToken+"/"+apiGetMe, apiMIMEType, nil)
 	if err == nil {
 		defer resp.Body.Close()
-		var bodydata JSONStruct
 		decoder := json.NewDecoder(resp.Body)
 		decoder.UseNumber()
-		err := decoder.Decode(&bodydata)
+		err := decoder.Decode(&tgbc.BotInfo)
 		if err == nil {
-			if bodydata["ok"].(bool) {
-				result := bodydata["result"].(JSONStruct)
-				tgbc.DisplayName = result["first_name"].(string)
-				tgbc.UserName = result["username"].(string)
+			if tgbc.BotInfo.Ok {
 				tgbc.APIToken = BOTToken
-				tgbc.BotID, _ = result["id"].(json.Number).Int64()
 				tgbc.LastUpdateID = 0
-				tgbc.MSGHandler = nil
 				tgbc.MSGParseMode = PMPlainText
+				tgbc.MSGHandler = nil
 			}
 		}
 	}
 	return tgbc
 }
 
-func (tgbc TGMinBotCore) jsonRPC(instruct JSONStruct, apiMethod string) (outstruct JSONStruct, err error) {
-	jsonval, _ := json.Marshal(instruct)
-	resp, err := http.Post(apiBaseURL+tgbc.APIToken+"/"+apiMethod, apiMIMEType, bytes.NewBuffer(jsonval))
+func (tgbc TGMinBotCore) jsonRPC(params JSONStruct, apiMethod string) (rawresponse []byte, err error) {
+	jsonparams, _ := json.Marshal(params)
+	response, err := http.Post(apiBaseURL+tgbc.APIToken+"/"+apiMethod, apiMIMEType, bytes.NewBuffer(jsonparams))
 	if err == nil {
-		defer resp.Body.Close()
-		decoder := json.NewDecoder(resp.Body)
-		decoder.UseNumber()
-		err := decoder.Decode(&outstruct)
+		defer response.Body.Close()
+		rawresponse, err := ioutil.ReadAll(response.Body)
 		if err == nil {
-			return outstruct, nil
+			return rawresponse, err
 		} else {
 			return nil, err
 		}
@@ -118,11 +92,11 @@ func (tgbc TGMinBotCore) jsonRPC(instruct JSONStruct, apiMethod string) (outstru
 	}
 }
 
-func (tgbc TGMinBotCore) formRPC(instruct JSONStruct, apiMethod string, attFile AttachedFileData) (outstruct JSONStruct, err error) {
+func (tgbc TGMinBotCore) formRPC(params JSONStruct, apiMethod string, attFile AttachedFileData) (rawresponse []byte, err error) {
 	body := &bytes.Buffer{}
 	// Set message parameters as multipart form data
 	writer := multipart.NewWriter(body)
-	for key, value := range instruct {
+	for key, value := range params {
 		vt := reflect.TypeOf(value)
 		switch vt.Kind() {
 		case reflect.String:
@@ -155,14 +129,12 @@ func (tgbc TGMinBotCore) formRPC(instruct JSONStruct, apiMethod string, attFile 
 	if err == nil {
 		req.Header.Add("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
 		hclient := &http.Client{}
-		resp, err := hclient.Do(req)
+		response, err := hclient.Do(req)
 		if err == nil {
-			decoder := json.NewDecoder(resp.Body)
-			decoder.UseNumber()
-			err := decoder.Decode(&outstruct)
-			resp.Body.Close()
+			defer response.Body.Close()
+			rawresponse, err := ioutil.ReadAll(response.Body)
 			if err == nil {
-				return outstruct, nil
+				return rawresponse, err
 			} else {
 				return nil, err
 			}
@@ -176,41 +148,58 @@ func (tgbc TGMinBotCore) formRPC(instruct JSONStruct, apiMethod string, attFile 
 
 func (tgbc *TGMinBotCore) LoadMessages() bool {
 	APIReq := JSONStruct{"offset": tgbc.LastUpdateID + 1, "timeout": apiWaitTime}
-	APIResp, err := tgbc.jsonRPC(APIReq, apiGetUpdates)
+	jsonraw, err := tgbc.jsonRPC(APIReq, apiGetUpdates)
 	if err == nil {
-		if APIResp["ok"].(bool) {
-			Results := APIResp["result"].([]interface{})
-			if len(Results) > 0 {
-				for _, msgstruct := range Results {
-					if tgbc.MSGHandler != nil {
-						tgbc.MSGHandler(msgstruct.(JSONStruct))
-						newuid, _ := msgstruct.(JSONStruct)["update_id"].(json.Number).Int64()
-						if newuid > tgbc.LastUpdateID {
-							tgbc.LastUpdateID = newuid
+		decoder := json.NewDecoder(bytes.NewReader(jsonraw))
+		decoder.UseNumber()
+		var getMessageInfo TGetMessageInfo
+		err := decoder.Decode(&getMessageInfo)
+		if err == nil {
+			if getMessageInfo.Ok {
+				if len(getMessageInfo.Result) > 0 {
+					for _, msgres := range getMessageInfo.Result {
+						// Update LastUpdateID
+						if msgres.UpdateID > tgbc.LastUpdateID {
+							tgbc.LastUpdateID = msgres.UpdateID
+						}
+						// Call message handler if set
+						if tgbc.MSGHandler != nil {
+							tgbc.MSGHandler(msgres.Message)
 						}
 					}
 				}
+				return true
 			}
-			return true
 		}
 	}
 	return false
 }
 
-func (tgbc TGMinBotCore) SendMessage_PlainText(msgtext string, chatid int64, replyto int64) (outstruct JSONStruct, err error) {
+func (tgbc TGMinBotCore) SendMessage_Text(msgtext string, chatid int64, replyto int64) (sentmsg TSentMessageInfo, err error) {
 	APIReq := JSONStruct{"chat_id": chatid, "text": msgtext, "parse_mode": tgbc.MSGParseMode}
 	if replyto != 0 {
 		APIReq["reply_to_message_id"] = replyto
 		APIReq["allow_sending_without_reply"] = true
 	}
-	return tgbc.jsonRPC(APIReq, apiSendMessage)
+	rawr, err := tgbc.jsonRPC(APIReq, apiSendMessage)
+	if err == nil {
+		decoder := json.NewDecoder(bytes.NewReader(rawr))
+		decoder.UseNumber()
+		err := decoder.Decode(&sentmsg)
+		if err == nil {
+			if sentmsg.Ok {
+				return sentmsg, nil
+			}
+		}
+	}
+	return sentmsg, err
 }
 
-func (tgbc TGMinBotCore) SendMessage_AsReplyTo(msgtext string, quotedmsg JSONStruct) (outstruct JSONStruct, err error) {
-	return tgbc.SendMessage_PlainText(msgtext, TGMSGGetFromID(quotedmsg), TGMSGGetMessageID(quotedmsg))
+func (tgbc TGMinBotCore) SendMessage_AsReply(msgtext string, quotedmsg TMessageInfo) (sentmsg TSentMessageInfo, err error) {
+	return tgbc.SendMessage_Text(msgtext, quotedmsg.From.ID, quotedmsg.MessageID)
 }
 
-func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid int64) (outstruct JSONStruct, err error) {
+func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid int64) (sentaudio TSentAudioMessageInfo, err error) {
 	APIReq := JSONStruct{"chat_id": chatid,
 		"caption":   audiofile.Caption,
 		"performer": audiofile.Performer,
@@ -218,5 +207,16 @@ func (tgbc TGMinBotCore) SendMessage_Audio(audiofile AttachedFileData, chatid in
 	audiofile.RemoteName = audiofile.Performer + " - " + audiofile.Title + ".mp3"
 	audiofile.FieldName = "audio"
 	audiofile.MimeType = "audio/mpeg"
-	return tgbc.formRPC(APIReq, apiSendAudio, audiofile)
+	rawr, err := tgbc.formRPC(APIReq, apiSendAudio, audiofile)
+	if err == nil {
+		decoder := json.NewDecoder(bytes.NewReader(rawr))
+		decoder.UseNumber()
+		err := decoder.Decode(&sentaudio)
+		if err == nil {
+			if sentaudio.Ok {
+				return sentaudio, nil
+			}
+		}
+	}
+	return sentaudio, err
 }
