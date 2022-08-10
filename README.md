@@ -6,6 +6,7 @@ Minimalistic Telegram Bot package written in Go. Get your bot running in minutes
 
     * Sending text-only replies with quoting support
 	* Sending audio files
+    * Resilient connection to API server
 
 ## Planned features
 
