@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/UrsusArctos/tgminbot/buoy"
 	mbot "github.com/UrsusArctos/tgminbot/minbotcore"
 )
 
@@ -27,6 +28,10 @@ func ActualHandler(msginfo mbot.TMessageInfo) {
 	}
 }
 
+func DebugSayHandler(message string) {
+	fmt.Println(message)
+}
+
 func main() {
 	// Read Bot API token from file
 	token, _ := ioutil.ReadFile("token.txt")
@@ -35,9 +40,15 @@ func main() {
 	fmt.Println("Started as @" + tgb.BotInfo.Result.Username)
 	// Set message handler
 	tgb.MSGHandler = ActualHandler
+	// Set Buoy
+	Buoy := buoy.TBuoyParams{
+		MinimumSuccessTime:  3600,
+		RestartDelay:        300,
+		GeneralFailureCount: 10,
+		DebugCallback:       DebugSayHandler}
 	// Run message loop
-	for tgb.LoadMessages() {
-	}
-	// All done
-	fmt.Printf("Stopped at message ID = %d\n", tgb.LastUpdateID)
+	Buoy.KeepFloating(func() {
+		for tgb.LoadMessages() {
+		}
+	})
 }
